@@ -1,7 +1,7 @@
 // server.js
 const express = require('express');
 const session = require('express-session');
-D
+
 const cors = require('cors'); // 👈 Adicione esta dependência
 require('dotenv').config();
 
