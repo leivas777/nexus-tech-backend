@@ -35,7 +35,6 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'seu-secret-aqui',
     resave: false,
     saveUninitialized: true,
-<<<<<<< HEAD
     cookie: { 
         secure: false, // ✅ Correto para HTTP
         httpOnly: true,
@@ -63,17 +62,10 @@ app.get('/health', (req, res) => {
 });
 
 // ⭐ REGISTRAR AS ROTAS
-=======
-    cookie: { secure: false }
-}));
-
-// ⭐ REGISTRAR AS ROTAS DO META (adicione isto)
->>>>>>> ec985dcf5bd71a7c6a218261e4a75d0cf68409a5
 app.use('/api/meta', metaAuthRouter);
 app.use('/auth/meta', metaCallbackRouter);
 app.use('/api/auth', authRoutes);
 
-<<<<<<< HEAD
 // ✅ Middleware para debugar rotas não encontradas
 app.use((req, res) => {
     console.log(`❌ Rota não encontrada: ${req.method} ${req.path}`);
@@ -100,18 +92,10 @@ app.use((err, req, res, next) => {
         message: err.message,
         stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
-=======
-
-// Middleware para debugar rotas não encontradas
-app.use((req, res) => {
-    console.log(`❌ Rota não encontrada: ${req.method} ${req.path}`);
-    res.status(404).json({ error: 'route_not_found', path: req.path });
->>>>>>> ec985dcf5bd71a7c6a218261e4a75d0cf68409a5
 });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-<<<<<<< HEAD
     console.log('\n🚀 ========================================');
     console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
     console.log('🚀 ========================================\n');
@@ -123,10 +107,4 @@ app.listen(PORT, () => {
     console.log(`  📱 POST http://localhost:${PORT}/api/meta/exchange-code`);
     console.log(`  🔄 GET  http://localhost:${PORT}/auth/meta/callback`);
     console.log('\n⚠️  USE HTTP (não HTTPS) para acessar as rotas!\n');
-=======
-    console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
-    console.log('📍 Rotas Meta disponíveis:');
-    console.log('  POST /api/meta/exchange-code');
-    console.log('  GET /auth/meta/callback');
->>>>>>> ec985dcf5bd71a7c6a218261e4a75d0cf68409a5
 });
