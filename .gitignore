@@ -1,0 +1,17 @@
+<<<<<<< HEAD
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+=======
+node_modules/
+.env
+.env.local
+.env.*.local
+.DS_Store
+dist/
+build/
+*.log
+.vercel/
+.render/
+>>>>>>> ec985dcf5bd71a7c6a218261e4a75d0cf68409a5
