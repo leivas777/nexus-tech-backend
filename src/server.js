@@ -1,10 +1,8 @@
 // server.js
 const express = require('express');
 const session = require('express-session');
-<<<<<<< HEAD
+D
 const cors = require('cors'); // 👈 Adicione esta dependência
-=======
->>>>>>> ec985dcf5bd71a7c6a218261e4a75d0cf68409a5
 require('dotenv').config();
 
 const metaAuthRouter = require('./routes/metaAuth');
@@ -13,7 +11,6 @@ const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 
-<<<<<<< HEAD
 // ✅ CORS - Permitir requisições do React (porta 3000)
 app.use(cors({
     origin: 'http://localhost:3000', // Seu frontend React
@@ -30,8 +27,7 @@ app.use((req, res, next) => {
     next();
 });
 
-=======
->>>>>>> ec985dcf5bd71a7c6a218261e4a75d0cf68409a5
+
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
