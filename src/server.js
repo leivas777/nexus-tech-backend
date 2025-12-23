@@ -20,20 +20,31 @@ console.log('🌍 ========================================\n');
 
 // ✅ CONFIGURAÇÃO DINÂMICA DO CORS
 const allowedOrigins = isDevelopment
-    ? ['http://localhost:3000', 'http://localhost:3001'] // Desenvolvimento
+    ? [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001'
+    ]
     : [
-        process.env.FRONTEND_URL || 'https://seu-frontend.com', // Produção
-        'https://nexutech.tec.br' // Seu domínio de produção
-    ];
+        'https://nexustech.tec.br',
+        process.env.FRONTEND_URL
+    ].filter(Boolean);
 
 console.log('✅ CORS configurado para as seguintes origens:');
 allowedOrigins.forEach(origin => console.log(`   - ${origin}`));
 console.log();
 
+// ✅ CORS OPTIONS - Mais restritivo e explícito
 const corsOptions = {
-    origin: (origin, callback) => {
+    origin: function (origin, callback) {
         // ✅ Permitir requisições sem origin (mobile, Postman, etc)
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin) {
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.includes(origin)) {
+            console.log(`✅ CORS permitido para: ${origin}`);
             callback(null, true);
         } else {
             console.warn(`⚠️  CORS bloqueado para origem: ${origin}`);
@@ -43,12 +54,17 @@ const corsOptions = {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    maxAge: 86400 // 24 horas - cache do preflight
 };
 
+// ✅ APLICAR CORS GLOBALMENTE
 app.use(cors(corsOptions));
 
-// ✅ Middleware de Log - Ver todas as requisições
+// ✅ RESPONDER EXPLICITAMENTE A OPTIONS (importante!)
+app.options('*', cors(corsOptions));
+
+// ✅ Middleware de Log
 app.use((req, res, next) => {
     console.log(`📥 ${req.method} ${req.path}`);
     console.log(`   🔗 Protocol: ${req.protocol}`);
@@ -66,24 +82,25 @@ app.use(session({
     resave: false,
     saveUninitialized: true,
     cookie: { 
-        secure: isProduction, // ✅ true em produção (HTTPS), false em desenvolvimento
+        secure: isProduction, // true em HTTPS, false em HTTP
         httpOnly: true,
-        sameSite: isProduction ? 'strict' : 'lax', // ✅ Mais restritivo em produção
-        maxAge: 24 * 60 * 60 * 1000 // 24 horas
+        sameSite: isProduction ? 'strict' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000
     }
 }));
 
 console.log(`🔒 Cookie seguro: ${isProduction ? '✅ Ativado (HTTPS)' : '❌ Desativado (HTTP)'}`);
 console.log();
 
-// ✅ Rota de teste para verificar se o servidor está funcionando
+// ✅ Rota de teste
 app.get('/', (req, res) => {
     res.json({ 
         status: 'online',
         message: '✅ Servidor funcionando corretamente!',
         environment: isDevelopment ? 'development' : 'production',
         protocol: req.protocol,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        corsOrigins: allowedOrigins
     });
 });
 
@@ -98,6 +115,18 @@ app.get('/health', (req, res) => {
     });
 });
 
+// ✅ Rota de CORS check
+app.get('/api/cors-check', (req, res) => {
+    res.json({
+        origin: req.get('origin'),
+        allowed: allowedOrigins,
+        isAllowed: !req.get('origin') || allowedOrigins.includes(req.get('origin')),
+        message: req.get('origin') && allowedOrigins.includes(req.get('origin')) 
+            ? '✅ CORS permitido'
+            : '❌ CORS bloqueado'
+    });
+});
+
 // ✅ Rota de configuração (apenas em desenvolvimento)
 if (isDevelopment) {
     app.get('/api/config', (req, res) => {
@@ -105,7 +134,8 @@ if (isDevelopment) {
             environment: 'development',
             corsOrigins: allowedOrigins,
             sessionSecret: '***' + process.env.SESSION_SECRET?.slice(-4),
-            nodeEnv: process.env.NODE_ENV
+            nodeEnv: process.env.NODE_ENV,
+            frontendUrl: process.env.FRONTEND_URL
         });
     });
 }
@@ -115,7 +145,7 @@ app.use('/api/meta', metaAuthRouter);
 app.use('/auth/meta', metaCallbackRouter);
 app.use('/api/auth', authRoutes);
 
-// ✅ Middleware para debugar rotas não encontradas
+// ✅ Middleware para rotas não encontradas
 app.use((req, res) => {
     console.log(`❌ Rota não encontrada: ${req.method} ${req.path}`);
     res.status(404).json({ 
@@ -125,8 +155,7 @@ app.use((req, res) => {
         availableRoutes: [
             'GET /',
             'GET /health',
-            'POST /api/meta/exchange-code',
-            'GET /auth/meta/callback',
+            'GET /api/cors-check',
             'POST /api/auth/login',
             'POST /api/auth/register',
             'GET /api/auth/profile'
@@ -138,11 +167,12 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
     console.error('❌ Erro no servidor:', err.message);
     
-    // Se for erro de CORS
     if (err.message.includes('CORS')) {
         return res.status(403).json({ 
             error: 'CORS_ERROR',
-            message: 'Origem não permitida'
+            message: 'Origem não permitida',
+            origin: req.get('origin'),
+            allowedOrigins: allowedOrigins
         });
     }
 
@@ -164,7 +194,5 @@ app.listen(PORT, () => {
     console.log(`  🔐 POST /api/auth/login`);
     console.log(`  📝 POST /api/auth/register`);
     console.log(`  👤 GET  /api/auth/profile`);
-    console.log(`  📱 POST /api/meta/exchange-code`);
-    console.log(`  🔄 GET  /auth/meta/callback`);
     console.log();
 });
