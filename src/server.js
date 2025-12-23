@@ -22,7 +22,7 @@ console.log('🌍 ========================================\n');
 const allowedOrigins = isDevelopment
     ? ['http://localhost:3000', 'http://localhost:3001'] // Desenvolvimento
     : [
-        process.env.REACT_APP_FRONTEND_URL || 'https://seu-frontend.com', // Produção
+        process.env.FRONTEND_URL || 'https://seu-frontend.com', // Produção
         'https://nexutech.tec.br' // Seu domínio de produção
     ];
 
