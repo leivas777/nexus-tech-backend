@@ -1,8 +1,7 @@
 // server.js
 const express = require('express');
 const session = require('express-session');
-
-const cors = require('cors'); // 👈 Adicione esta dependência
+const cors = require('cors');
 require('dotenv').config();
 
 const metaAuthRouter = require('./routes/metaAuth');
@@ -11,42 +10,78 @@ const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 
-// ✅ CORS - Permitir requisições do React (porta 3000)
-app.use(cors({
-    origin: 'http://localhost:3000', // Seu frontend React
+// ✅ DETECÇÃO AUTOMÁTICA DE AMBIENTE
+const isDevelopment = process.env.NODE_ENV === 'development';
+const isProduction = process.env.NODE_ENV === 'production';
+
+console.log('\n🌍 ========================================');
+console.log(`   Ambiente: ${isDevelopment ? '🔧 DESENVOLVIMENTO' : '🚀 PRODUÇÃO'}`);
+console.log('🌍 ========================================\n');
+
+// ✅ CONFIGURAÇÃO DINÂMICA DO CORS
+const allowedOrigins = isDevelopment
+    ? ['http://localhost:3000', 'http://localhost:3001'] // Desenvolvimento
+    : [
+        process.env.REACT_APP_FRONTEND_URL || 'https://seu-frontend.com', // Produção
+        'https://nexutech.tec.br' // Seu domínio de produção
+    ];
+
+console.log('✅ CORS configurado para as seguintes origens:');
+allowedOrigins.forEach(origin => console.log(`   - ${origin}`));
+console.log();
+
+const corsOptions = {
+    origin: (origin, callback) => {
+        // ✅ Permitir requisições sem origin (mobile, Postman, etc)
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`⚠️  CORS bloqueado para origem: ${origin}`);
+            callback(new Error('CORS não permitido para esta origem'));
+        }
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 
 // ✅ Middleware de Log - Ver todas as requisições
 app.use((req, res, next) => {
     console.log(`📥 ${req.method} ${req.path}`);
-    console.log(`🔗 Protocol: ${req.protocol}`); // Mostra se é http ou https
-    console.log(`🌐 Origin: ${req.get('origin') || 'Direct access'}`);
+    console.log(`   🔗 Protocol: ${req.protocol}`);
+    console.log(`   🌐 Origin: ${req.get('origin') || 'Direct access'}`);
     next();
 });
 
-
-// Middlewares
+// ✅ Middlewares de parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ✅ Configuração de Sessão
 app.use(session({
     secret: process.env.SESSION_SECRET || 'seu-secret-aqui',
     resave: false,
     saveUninitialized: true,
     cookie: { 
-        secure: false, // ✅ Correto para HTTP
+        secure: isProduction, // ✅ true em produção (HTTPS), false em desenvolvimento
         httpOnly: true,
+        sameSite: isProduction ? 'strict' : 'lax', // ✅ Mais restritivo em produção
         maxAge: 24 * 60 * 60 * 1000 // 24 horas
     }
 }));
+
+console.log(`🔒 Cookie seguro: ${isProduction ? '✅ Ativado (HTTPS)' : '❌ Desativado (HTTP)'}`);
+console.log();
 
 // ✅ Rota de teste para verificar se o servidor está funcionando
 app.get('/', (req, res) => {
     res.json({ 
         status: 'online',
         message: '✅ Servidor funcionando corretamente!',
+        environment: isDevelopment ? 'development' : 'production',
         protocol: req.protocol,
         timestamp: new Date().toISOString()
     });
@@ -56,10 +91,24 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
     res.json({ 
         status: 'healthy',
+        environment: isDevelopment ? 'development' : 'production',
         uptime: process.uptime(),
-        memory: process.memoryUsage()
+        memory: process.memoryUsage(),
+        timestamp: new Date().toISOString()
     });
 });
+
+// ✅ Rota de configuração (apenas em desenvolvimento)
+if (isDevelopment) {
+    app.get('/api/config', (req, res) => {
+        res.json({
+            environment: 'development',
+            corsOrigins: allowedOrigins,
+            sessionSecret: '***' + process.env.SESSION_SECRET?.slice(-4),
+            nodeEnv: process.env.NODE_ENV
+        });
+    });
+}
 
 // ⭐ REGISTRAR AS ROTAS
 app.use('/api/meta', metaAuthRouter);
@@ -79,32 +128,43 @@ app.use((req, res) => {
             'POST /api/meta/exchange-code',
             'GET /auth/meta/callback',
             'POST /api/auth/login',
-            'POST /api/auth/register'
+            'POST /api/auth/register',
+            'GET /api/auth/profile'
         ]
     });
 });
 
 // ✅ Middleware de tratamento de erros
 app.use((err, req, res, next) => {
-    console.error('❌ Erro no servidor:', err);
+    console.error('❌ Erro no servidor:', err.message);
+    
+    // Se for erro de CORS
+    if (err.message.includes('CORS')) {
+        return res.status(403).json({ 
+            error: 'CORS_ERROR',
+            message: 'Origem não permitida'
+        });
+    }
+
     res.status(500).json({ 
         error: 'internal_server_error',
         message: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        stack: isDevelopment ? err.stack : undefined
     });
 });
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log('\n🚀 ========================================');
-    console.log(`✅ Servidor rodando em http://localhost:${PORT}`);
+    console.log(`✅ Servidor rodando em ${isDevelopment ? 'http' : 'https'}://localhost:${PORT}`);
     console.log('🚀 ========================================\n');
     console.log('📍 Rotas disponíveis:');
-    console.log(`  🏠 GET  http://localhost:${PORT}/`);
-    console.log(`  💚 GET  http://localhost:${PORT}/health`);
-    console.log(`  🔐 POST http://localhost:${PORT}/api/auth/login`);
-    console.log(`  📝 POST http://localhost:${PORT}/api/auth/register`);
-    console.log(`  📱 POST http://localhost:${PORT}/api/meta/exchange-code`);
-    console.log(`  🔄 GET  http://localhost:${PORT}/auth/meta/callback`);
-    console.log('\n⚠️  USE HTTP (não HTTPS) para acessar as rotas!\n');
+    console.log(`  🏠 GET  /`);
+    console.log(`  💚 GET  /health`);
+    console.log(`  🔐 POST /api/auth/login`);
+    console.log(`  📝 POST /api/auth/register`);
+    console.log(`  👤 GET  /api/auth/profile`);
+    console.log(`  📱 POST /api/meta/exchange-code`);
+    console.log(`  🔄 GET  /auth/meta/callback`);
+    console.log();
 });
