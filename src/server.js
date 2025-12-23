@@ -28,6 +28,7 @@ const allowedOrigins = isDevelopment
     ]
     : [
         'https://nexustech.tec.br',
+        'https://www.nexustech.tec.br',
         process.env.FRONTEND_URL
     ].filter(Boolean);
 
@@ -35,7 +36,7 @@ console.log('✅ CORS configurado para as seguintes origens:');
 allowedOrigins.forEach(origin => console.log(`   - ${origin}`));
 console.log();
 
-// ✅ CORS OPTIONS - Mais restritivo e explícito
+// ✅ CORS OPTIONS - Simples e eficaz
 const corsOptions = {
     origin: function (origin, callback) {
         // ✅ Permitir requisições sem origin (mobile, Postman, etc)
@@ -55,24 +56,13 @@ const corsOptions = {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     optionsSuccessStatus: 200,
-    maxAge: 86400 // 24 horas - cache do preflight
+    maxAge: 86400
 };
 
-// ✅ APLICAR CORS GLOBALMENTE
+// ✅ APLICAR CORS GLOBALMENTE - ISSO JÁ TRATA OPTIONS AUTOMATICAMENTE!
 app.use(cors(corsOptions));
 
-// ✅ RESPONDER EXPLICITAMENTE A OPTIONS (importante!)
-app.options((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', req.get('origin'));
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-    
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-    next();
-});
+// ⚠️ NÃO PRECISA DE app.options() - cors() já cuida disso!
 
 // ✅ Middleware de Log
 app.use((req, res, next) => {
@@ -92,7 +82,7 @@ app.use(session({
     resave: false,
     saveUninitialized: true,
     cookie: { 
-        secure: isProduction, // true em HTTPS, false em HTTP
+        secure: isProduction,
         httpOnly: true,
         sameSite: isProduction ? 'strict' : 'lax',
         maxAge: 24 * 60 * 60 * 1000
