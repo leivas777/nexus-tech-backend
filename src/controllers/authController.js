@@ -1,139 +1,288 @@
+// controllers/authController.js
 const jwt = require('jsonwebtoken');
-const User = require('../models/Users');
+const bcrypt = require('bcrypt');
 
-//Gerar Token JWT
-const generateToken = (userId) => {
-    return jwt.sign({ id:userId}, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN
-    });
-};
+// ✅ Importar modelos corretamente
+const db = require('../models');
+const { User, Customer } = db;
 
-//Registro novo usuário
-exports.register = async(req, res) => {
-    try{
-        const {name, email, password} = req.body;
+console.log('✅ authController carregado');
+console.log(`   User disponível: ${User ? '✅' : '❌'}`);
+console.log(`   Customer disponível: ${Customer ? '✅' : '❌'}\n`);
 
-        //Validações básicas
-        if(!name || !email || !password){
+// ✅ Verificar se modelos foram carregados
+if (!User) {
+  console.error('❌ ERRO CRÍTICO: User model não está disponível!');
+  process.exit(1);
+}
+
+if (!Customer) {
+  console.error('❌ ERRO CRÍTICO: Customer model não está disponível!');
+  process.exit(1);
+}
+
+// ✅ Register
+exports.register = async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+
+        console.log('📝 Tentativa de registro:', email);
+
+        // ✅ Validação
+        if (!name || !email || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'Por favor, preencha todos os campos obrigatórios'
+                message: 'Nome, email e senha são obrigatórios'
             });
         }
 
-        //Verificar se usuário já existe
-        const existingUser = await User.findOne({ where:{email}});
-        if(existingUser){
+        // ✅ Validar email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email inválido'
+            });
+        }
+
+        // ✅ Validar comprimento da senha
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Senha deve ter pelo menos 6 caracteres'
+            });
+        }
+
+        // ✅ Verificar se email já existe
+        const existingUser = await User.findOne({ where: { email } });
+
+        if (existingUser) {
+            console.warn('⚠️ Email já cadastrado:', email);
             return res.status(409).json({
                 success: false,
-                message: 'E-mail já cadastrado'
+                message: 'Email já cadastrado'
             });
         }
 
-        //Criar usuário
-        const user = await User.create({name, email, password});
+        console.log('✅ Email disponível');
 
-        //Gerar Token
-        const token = generateToken(user.id);
-        res.status(201).json({
-            success: true, 
-            message: 'Usuário registrado com sucesso',
-            data: {
-                user,
-                token
-            }
+        // ✅ Criar usuário
+        const user = await User.create({
+            name,
+            email,
+            password
         });
-    }catch(error){
-        console.error('Erro no registro:', error);
-        res.status(500).json({
+
+        console.log('✅ Usuário criado com sucesso:', user.id);
+
+        // ✅ Gerar JWT
+        const token = jwt.sign(
+            {
+                id: user.id,
+                email: user.email,
+                name: user.name
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        console.log('✅ JWT gerado com sucesso');
+
+        return res.status(201).json({
+            success: true,
+            message: 'Registro realizado com sucesso',
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email
+            },
+            customer: null
+        });
+
+    } catch (error) {
+        console.error('❌ Erro no registro:', error.message);
+        console.error('   Stack:', error.stack);
+
+        if (res.headersSent) {
+            return;
+        }
+
+        return res.status(500).json({
             success: false,
-            message: 'Erro ao registrar usuário',
-            error: process.env.NODE_ENV === 'development'? error.message: undefined
-        })
+            message: 'Erro ao fazer registro',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
-//Login de usuário
-exports.login = async(req, res) => {
-    try{
-        const {email, password} = req.body;
+// ✅ Login
+exports.login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-        //Validações
-        if(!email || !password){
+        console.log('🔐 Tentativa de login:', email);
+
+        // ✅ Validação
+        if (!email || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'Por favor, forneça e-mail e senha'
+                message: 'Email e senha são obrigatórios'
             });
         }
 
-        //Buscar usuário
-        const user = await User.findOne({ where: {email}});
-        if(!user){
+        // ✅ Verificar se User está definido
+        if (!User) {
+            console.error('❌ ERRO CRÍTICO: User model não está disponível');
+            return res.status(500).json({
+                success: false,
+                message: 'Erro interno do servidor'
+            });
+        }
+
+        console.log('✅ User model disponível');
+
+        // ✅ Buscar usuário
+        const user = await User.findOne({ where: { email } });
+
+        if (!user) {
+            console.warn('⚠️ Usuário não encontrado:', email);
             return res.status(401).json({
                 success: false,
-                message: 'Credenciais inválidas'
+                message: 'Email ou senha inválidos'
             });
         }
 
-        //Verificar se usuário está ativo
-        if(!user.isActive){
-            return res.status(403).json({
-                success: false,
-                message: 'Conta desativada. Entre em contato com o suporte'
-            });
-        }
+        console.log('✅ Usuário encontrado:', user.id);
 
-        //Verificar senha
-        const isPasswordValid = await user.comparePassword(password);
-        if(!isPasswordValid){
+        // ✅ Verificar senha
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+
+        if (!isPasswordValid) {
+            console.warn('⚠️ Senha inválida para usuário:', email);
             return res.status(401).json({
                 success: false,
-                message: 'Credenciais inválidas'
+                message: 'Email ou senha inválidos'
             });
         }
 
-        //Gerar token
-        const token = generateToken(user.id);
+        console.log('✅ Senha válida');
 
-        res.status(200).json({
+        // ✅ Buscar customer do usuário
+        const customer = await Customer.findOne({ where: { user_id: user.id } });
+
+        console.log('📋 Customer encontrado:', customer ? customer.id : 'Nenhum');
+
+        // ✅ Gerar JWT
+        const token = jwt.sign(
+            {
+                id: user.id,
+                email: user.email,
+                name: user.name
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        console.log('✅ JWT gerado com sucesso');
+
+        return res.json({
             success: true,
             message: 'Login realizado com sucesso',
-            data:{
-                user,
-                token
-            }
-        })
-    }catch(error){
-        console.error('Erro no login:', error);
-        res.status(500).json({
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email
+            },
+            customer: customer ? {
+                id: customer.id,
+                nome: customer.nome,
+                email: customer.email,
+                segmento: customer.segmento,
+                qtdClientes: customer.qtd_clientes,
+                site: customer.site,
+                telefone: customer.telefone
+            } : null
+        });
+
+    } catch (error) {
+        console.error('❌ Erro no login:', error.message);
+        console.error('   Stack:', error.stack);
+
+        if (res.headersSent) {
+            return;
+        }
+
+        return res.status(500).json({
             success: false,
-            message: 'Erro ao realizar login.',
-            error: process.env.NODE_ENV === 'development'?error.message:undefined
+            message: 'Erro ao fazer login',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
 
-//Obter perfil do usuário autenticado
-exports.getProfile = async(req, res) => {
-    try{
-        const user = await User.findByPk(req.userId);
+// ✅ Get Profile
+exports.getProfile = async (req, res) => {
+    try {
+        const userId = req.user?.id;
 
-        if(!user){
+        console.log('👤 Buscando perfil do usuário:', userId);
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Usuário não autenticado'
+            });
+        }
+
+        // ✅ Buscar usuário
+        const user = await User.findByPk(userId, {
+            attributes: ['id', 'name', 'email']
+        });
+
+        if (!user) {
             return res.status(404).json({
                 success: false,
                 message: 'Usuário não encontrado'
             });
         }
 
-        res.status(200).json({
+        console.log('✅ Usuário encontrado:', user.id);
+
+        // ✅ Buscar customer
+        const customer = await Customer.findOne({ where: { user_id: userId } });
+
+        console.log('📋 Customer encontrado:', customer ? customer.id : 'Nenhum');
+
+        return res.json({
             success: true,
-            data: { user }
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email
+            },
+            customer: customer ? {
+                id: customer.id,
+                nome: customer.nome,
+                email: customer.email,
+                segmento: customer.segmento,
+                qtdClientes: customer.qtd_clientes,
+                site: customer.site,
+                telefone: customer.telefone
+            } : null
         });
-    }catch(error){
-        console.error('Erro ao buscar perfil:', error);
-        res.status(500).json({
+
+    } catch (error) {
+        console.error('❌ Erro ao buscar perfil:', error.message);
+
+        if (res.headersSent) {
+            return;
+        }
+
+        return res.status(500).json({
             success: false,
-            message: 'Erro ao buscar perfil do usuário'
-        })
+            message: 'Erro ao buscar perfil'
+        });
     }
-}
+};

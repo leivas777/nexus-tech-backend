@@ -1,44 +1,72 @@
 const jwt = require('jsonwebtoken');
 
-exports.authenticate = async(req, res, next) => {
-    try{
-        //Extrair token do header
-        const authHeader = req.headers.authorization;
+const authenticate = (req, res, next) => {
+    try {
+        console.log('🔐 Verificando autenticação...');
 
-        if(authHeader || !authHeader.startsWith('Bearer')){
-            return res.json(401).json({
+        // ✅ Pegar token do header
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader) {
+            console.warn('⚠️ Token não fornecido');
+            return res.status(401).json({
                 success: false,
                 message: 'Token não fornecido'
             });
         }
 
-        const token = authHeader.split('')[1];
+        // ✅ Extrair token (formato: "Bearer TOKEN")
+        const token = authHeader.startsWith('Bearer ') 
+            ? authHeader.slice(7) 
+            : authHeader;
 
-        //Verificar token
+        console.log('🔑 Token extraído:', token.substring(0, 20) + '...');
+
+        // ✅ Verificar token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        console.log('✅ Token válido, usuário:', decoded.id);
 
-        //Adicionar userId ao request
-        req.userId = decoded.id;
+        // ✅ Adicionar usuário ao request
+        req.user = decoded;
 
-        next()
-    }catch(error){
-        if(error.name === 'TokenExpiredError'){
+        // ✅ CRÍTICO: Chamar next() para continuar para o próximo middleware/rota
+        next();
+
+    } catch (error) {
+        console.error('❌ Erro na autenticação:', error.message);
+
+        // ✅ Verificar tipo de erro
+        if (error.name === 'TokenExpiredError') {
             return res.status(401).json({
                 success: false,
                 message: 'Token expirado'
             });
         }
 
-        if(error.name === 'JsonWebTokenError'){
+        if (error.name === 'JsonWebTokenError') {
             return res.status(401).json({
                 success: false,
                 message: 'Token inválido'
             });
         }
 
-        res.status(500).json({
+        // ✅ Verificar se headers já foram enviados
+        if (res.headersSent) {
+            console.error('⚠️ Headers já foram enviados');
+            return;
+        }
+
+        return res.status(500).json({
             success: false,
-            message: 'Erro na autenticação'
-        })
+            message: 'Erro ao verificar autenticação',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
+};
+
+// ✅ Exportar com alias para facilitar importação
+module.exports = {
+    authenticate,
+    authMiddleware: authenticate // ✅ Alias
 };
