@@ -19,13 +19,13 @@ class GoogleCalendarService {
             "https://www.googleapis.com/auth/userinfo.profile"
         ];
 
-        const authUrl = this.oauth2Client.generateAuthUrl({
+        return this.oauth2Client.generateAuthUrl({
             access_type: "offline",
             scope: scopes,
-            prompt: "consent"
+            prompt: "consent",
+            state: String(userId)
         });
 
-        return authUrl;
     }
 
     /**

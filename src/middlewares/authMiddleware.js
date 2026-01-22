@@ -6,21 +6,20 @@ const authenticate = (req, res, next) => {
 
         // ✅ Pegar token do header
         const authHeader = req.headers.authorization;
+        const queryToken = req.query.token;
+
+        let token = null;
         
-        if (!authHeader) {
-            console.warn('⚠️ Token não fornecido');
-            return res.status(401).json({
-                success: false,
-                message: 'Token não fornecido'
-            });
+        if (authHeader) {
+            token = authHeader.startsWith('Bearer') ? authHeader.slice(7) : authHeader;
+        }else if (queryToken){
+            token = queryToken;
         }
 
-        // ✅ Extrair token (formato: "Bearer TOKEN")
-        const token = authHeader.startsWith('Bearer ') 
-            ? authHeader.slice(7) 
-            : authHeader;
+        if(!token){
+            return res.status(401).json({ success: false, message: 'Token não fornecido' });
+        }
 
-        console.log('🔑 Token extraído:', token.substring(0, 20) + '...');
 
         // ✅ Verificar token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
